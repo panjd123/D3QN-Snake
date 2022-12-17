@@ -8,6 +8,8 @@ from model import DuelingNetwork
 from buffer import Buffer
 from snake import Snake
 from tqdm import tqdm
+import time
+import os
 import os.path as osp
 from argparse import ArgumentParser
 
@@ -18,7 +20,8 @@ parser.add_argument("--norender", action="store_true", help="no render while tra
 parser.add_argument("--train", action="store_true", help="only train")
 parser.add_argument("--play", action="store_true", help="only play")
 argument = parser.parse_args()
-
+history_dir = 'history-'+time.strftime('%Y-%m-%d-%H-%M-%S')
+os.mkdir(history_dir)
 class DDQN:
     def __init__(self, input_shape, num_act, env: Snake, gamma=0.99, lamda=0.05, epsilon=0.95) -> None:
         self.gamma = gamma
@@ -112,7 +115,7 @@ class DDQN:
                     if is_render:
                         pygame.display.set_caption(f"第{epoch}代小蛇")
                     if epoch>argument.history and epoch % 1000==0:
-                        torch.save(self.model.state_dict(),f"model_{epoch}.pkl")
+                        torch.save(self.model.state_dict(),osp.join(history_dir,f"model_{epoch}.pkl"))
                     total_reward = 0
                 else:
                     obs = obs_next
@@ -146,7 +149,7 @@ class DDQN:
                 self.env.render()
                 pygame.time.delay(30)
                 total_reward += rew
-                print(total_reward, obs)
+                print('total_reward:', total_reward, 'obs:', obs)
 
 
 if __name__ == '__main__':
@@ -160,6 +163,7 @@ if __name__ == '__main__':
     
     if not argument.play:
         ddqn.training(max_step = argument.step, is_render=not argument.norender)
+        torch.save(ddqn.model.state_dict(),osp.join(history_dir,'model.pkl'))
         torch.save(ddqn.model.state_dict(), 'model.pkl')
     
     if not argument.train:
