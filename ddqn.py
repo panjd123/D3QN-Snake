@@ -12,7 +12,7 @@ import os.path as osp
 from argparse import ArgumentParser
 
 parser = ArgumentParser()
-parser.add_argument("--step", type=int, default=100000, help="the number of step it will train")
+parser.add_argument("--step", type=int, default=1000, help="the number of step it will train")
 parser.add_argument("--history", type=int, default=0, help="after HISTORY generations, save model every 1000 generations")
 parser.add_argument("--norender", action="store_true", help="no render while training")
 parser.add_argument("--train", action="store_true", help="only train")
@@ -134,6 +134,7 @@ class DDQN:
         return q_value_max_arg.item()
 
     def play(self, max_epoch = 100):
+        pygame.display.set_caption("Snake")
         self.epsilon = 1.0
         self.model.load_state_dict(torch.load('model.pkl'))
         for epoch in range(max_epoch):
