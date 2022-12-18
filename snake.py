@@ -61,24 +61,40 @@ class Snake:
     mode = '1d'
     tic = 0
     lst_eat = 0
+    visual_dis = 1
 
-    def __init__(self) -> None:
+    def __init__(self, visual_dis=1) -> None:
         pygame.init()
         self.screen = pygame.display.set_mode(self.settings.screen_size)
         pygame.display.set_caption("Snake")
+        self.visual_dis = visual_dis
         self.reset()
 
     def setvis(self, p: Point, t=1):
         self.vis[p.row-1][p.col-1] = t
 
     def get_sn(self, p):
+        dis = self.visual_dis
         x = p.row-1
         y = p.col-1
-        s1 = self.vis[x-1][y] if x >= 1 else 1.0
-        s2 = self.vis[x+1][y] if x < self.settings.row-1 else 1.0
-        s3 = self.vis[x][y-1] if y >= 1 else 1.0
-        s4 = self.vis[x][y+1] if y < self.settings.col-1 else 1.0
-        return [s1, s2, s3, s4]
+        sn = []
+        for j in range(-dis,dis+1):
+            for i in range(-dis,dis+1):
+                if (i==0 and j==0) or (abs(i)+abs(j)>dis):
+                    continue
+                tx = x+i
+                ty = y+j
+                if 0<=tx and tx<self.settings.row and 0<=ty and ty<self.settings.col:
+                    sn.append(self.vis[tx][ty])
+                else:
+                    sn.append(1)
+        # s1 = self.vis[x-1][y] if x >= 1 else 1.0
+        # s2 = self.vis[x+1][y] if x < self.settings.row-1 else 1.0
+        # s3 = self.vis[x][y-1] if y >= 1 else 1.0
+        # s4 = self.vis[x][y+1] if y < self.settings.col-1 else 1.0
+        # print('s:',sn,[s1, s2, s3, s4])
+        # return [s1, s2, s3, s4]
+        return sn
 
     def get_body_food(self):
         return [self.bodys[0].row/self.settings.row, self.bodys[0].col/self.settings.col,
@@ -138,7 +154,7 @@ class Snake:
 
     def get_lazy(self):
         # print('lazy:', (self.tic - self.lst_eat)/(0.5*self.settings.col*self.settings.row))
-        return (self.tic - self.lst_eat)/(0.5*self.settings.col*self.settings.row)
+        return (self.tic - self.lst_eat)/(self.settings.col*self.settings.row)
 
     def step(self, action):
         rew = 0

@@ -11,17 +11,33 @@ from tqdm import tqdm
 import time
 import os
 import os.path as osp
+import matplotlib.pyplot as plt
 from argparse import ArgumentParser
 
 parser = ArgumentParser()
-parser.add_argument("--step", type=int, default=1000, help="the number of step it will train")
-parser.add_argument("--history", type=int, default=0, help="after HISTORY generations, save model every 1000 generations")
-parser.add_argument("--norender", action="store_true", help="no render while training")
+parser.add_argument("--step", type=int, default=1000,
+                    help="the number of step it will train")
+parser.add_argument("--history", type=int, default=0,
+                    help="after HISTORY generations, save model every 1000 generations")
+parser.add_argument("--norender", action="store_true",
+                    help="no render while training")
 parser.add_argument("--train", action="store_true", help="only train")
 parser.add_argument("--play", action="store_true", help="only play")
+parser.add_argument("--visual", type=int, default=2,
+                    help="the manhattan distance that snakes can see, note that this argument will affect the model's parameter size, if you plan to load a model, pay attention to the corresponding.")
+parser.add_argument("--model_load", type=str,
+                    default="model.pkl", help="the path of the loading model")
+parser.add_argument("--model_save", type=str,
+                    default="model.pkl", help="the model's output path")
+parser.add_argument("--test", type=str, default="")
+
 argument = parser.parse_args()
 history_dir = 'history-'+time.strftime('%Y-%m-%d-%H-%M-%S')
-os.mkdir(history_dir)
+
+if not argument.play and not argument.test:
+    os.mkdir(history_dir)
+
+
 class DDQN:
     def __init__(self, input_shape, num_act, env: Snake, gamma=0.99, lamda=0.05, epsilon=0.95) -> None:
         self.gamma = gamma
@@ -77,7 +93,7 @@ class DDQN:
 
         return loss.item()
 
-    def training(self, max_step=1000, is_render = False):
+    def training(self, max_step=1000, is_render=False):
         try:
             epoch = 0
             writer = SummaryWriter()
@@ -90,13 +106,9 @@ class DDQN:
                     act = self.env.random_action(act)
 
                 rew, done, obs_next, info = self.env.step(act)
-                
+
                 if is_render:
                     self.env.render()
-
-                # if done:
-                #     print(total_reward)
-                #     self.env.render()
 
                 self.buffer.add(obs, act, rew, done, obs_next)
 
@@ -110,16 +122,20 @@ class DDQN:
                     writer.add_scalars(
                         'score', {'reward': total_reward, 'score': info['score']}, epoch)
 
+                    self.env.render()
+                    pygame.display.set_caption(f"第{epoch}代小蛇")
+
                     obs, act, rew, done, info = self.env.reset()
                     epoch += 1
-                    if is_render:
-                        pygame.display.set_caption(f"第{epoch}代小蛇")
-                    if epoch>argument.history and epoch % 1000==0:
-                        torch.save(self.model.state_dict(),osp.join(history_dir,f"model_{epoch}.pkl"))
+                    if epoch > argument.history and epoch % 1000 == 0:
+                        torch.save(self.model.state_dict(), osp.join(
+                            history_dir, f"model_{epoch}.pkl"))
                     total_reward = 0
                 else:
                     obs = obs_next
             writer.close()
+            torch.save(self.model.state_dict(), osp.join(
+                history_dir, f"model_{epoch}.pkl"))
         except KeyboardInterrupt:
             torch.save(self.model.state_dict(), 'model_interrupt.pkl')
             writer.close()
@@ -136,35 +152,69 @@ class DDQN:
         #     return q_value_max_arg.item()
         return q_value_max_arg.item()
 
-    def play(self, max_epoch = 100):
+    def play(self, max_epoch=100, delay=30, is_render=True):
         pygame.display.set_caption("Snake")
         self.epsilon = 1.0
-        self.model.load_state_dict(torch.load('model.pkl'))
+        rewards = []
+        scores = []
         for epoch in range(max_epoch):
             total_reward = 0
             obs, act, rew, done, info = self.env.reset()
             while not done:
                 act = self.select_action(obs, act)
                 rew, done, obs, info = self.env.step(act)
-                self.env.render()
-                pygame.time.delay(30)
+                if is_render:
+                    self.env.render()
+                pygame.time.delay(delay)
                 total_reward += rew
-                print('total_reward:', total_reward, 'obs:', obs)
+                # print('total_reward:', total_reward, 'obs:', obs)
+            rewards.append(total_reward)
+            scores.append(info['score'])
+            self.env.render()
+        return rewards, scores
+
+
+def test(ddqn: DDQN, dir='history-2022-12-18-03-28-52', epoch=100):
+    print("testing",dir)
+    gens = []
+    scores = []
+    for root, dirs, files in os.walk(dir):
+        files = files[1:]
+        files = sorted(files, key=lambda x: int(x[6:-4]))
+        for name in tqdm(files):
+            ddqn.model.load_state_dict(torch.load(osp.join(root, name)))
+            rews, scos = ddqn.play(max_epoch=epoch, delay=0)
+            scores.append(np.mean(scos))
+            gens.append(name[6:-4])
+            tqdm.write(name+"\t"+str(scores[-1]))
+    gens = np.array(gens)
+    scores = np.array(scores)
+    plt.plot(scores)
+    plt.show()
 
 
 if __name__ == '__main__':
-    env = Snake()
+    env = Snake(visual_dis=argument.visual)
+    tmp = env.reset()
+    obs_length = len(tmp[0])
     env.mode = '1d'
-    ddqn = DDQN((13,), 4, env)
+    print('obs_length=', obs_length)
+    ddqn = DDQN((obs_length,), 4, env)
     
+    if argument.test:
+        test(ddqn,argument.test)
+        exit(0)
+
     # continue to train
-    if osp.exists('./model.pkl'):
-        ddqn.model.load_state_dict(torch.load('model.pkl'))
-    
+    try:
+        if osp.exists('./model.pkl'):
+            ddqn.model.load_state_dict(torch.load(argument.model_load))
+    except:
+        print('loading fail, use initialization parameters')
+
     if not argument.play:
-        ddqn.training(max_step = argument.step, is_render=not argument.norender)
-        torch.save(ddqn.model.state_dict(),osp.join(history_dir,'model.pkl'))
-        torch.save(ddqn.model.state_dict(), 'model.pkl')
-    
+        ddqn.training(max_step=argument.step, is_render=not argument.norender)
+        torch.save(ddqn.model.state_dict(), argument.model_save)
+
     if not argument.train:
         ddqn.play(5)
