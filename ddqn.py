@@ -13,6 +13,7 @@ import os
 import os.path as osp
 import matplotlib.pyplot as plt
 from argparse import ArgumentParser
+from collections import deque
 
 parser = ArgumentParser()
 parser.add_argument("--step", type=int, default=1000,
@@ -30,6 +31,8 @@ parser.add_argument("--model_load", type=str,
 parser.add_argument("--model_save", type=str,
                     default="model.pkl", help="the model's output path")
 parser.add_argument("--test", type=str, default="")
+parser.add_argument("--epsilon", type=float, default=0.95, help="probability of using random movement during training")
+
 
 argument = parser.parse_args()
 history_dir = 'history-'+time.strftime('%Y-%m-%d-%H-%M-%S')
@@ -93,12 +96,14 @@ class DDQN:
 
         return loss.item()
 
-    def training(self, max_step=1000, is_render=False):
+    def training(self, max_step=1000, is_render=False, is_log=False, queue_maxlen=50):
         try:
             epoch = 0
             writer = SummaryWriter()
             total_reward = 0
             obs, act, rew, done, info = self.env.reset()
+            scores = deque(maxlen=queue_maxlen)
+            rewards = deque(maxlen=queue_maxlen)
             for step in tqdm(range(max_step)):
                 if step > self.expl_before:
                     act = self.select_action(obs, act)
@@ -122,6 +127,13 @@ class DDQN:
                     writer.add_scalars(
                         'score', {'reward': total_reward, 'score': info['score']}, epoch)
 
+                    if is_log:
+                        rewards.append(total_reward)
+                        scores.append(info['score'])
+                        mean_reward = np.mean(list(rewards))
+                        mean_score = np.mean(list(scores))
+                        tqdm.write(f'{epoch}: '+str(mean_reward)+", "+str(mean_score))
+                    
                     self.env.render()
                     pygame.display.set_caption(f"第{epoch}代小蛇")
 
@@ -179,7 +191,6 @@ def test(ddqn: DDQN, dir='history-2022-12-18-03-28-52', epoch=100):
     gens = []
     scores = []
     for root, dirs, files in os.walk(dir):
-        files = files[1:]
         files = sorted(files, key=lambda x: int(x[6:-4]))
         for name in tqdm(files):
             ddqn.model.load_state_dict(torch.load(osp.join(root, name)))
@@ -199,7 +210,7 @@ if __name__ == '__main__':
     obs_length = len(tmp[0])
     env.mode = '1d'
     print('obs_length=', obs_length)
-    ddqn = DDQN((obs_length,), 4, env)
+    ddqn = DDQN((obs_length,), 4, env, epsilon=argument.epsilon)
     
     if argument.test:
         test(ddqn,argument.test)
