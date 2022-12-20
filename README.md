@@ -1,4 +1,4 @@
-# DDQN Snake
+# D3QN Snake
 
 [中文版](#ddqn-贪吃蛇)
 
@@ -35,14 +35,14 @@ The project also uploaded 2 models trained for 5 hours on the CPU
 
 For further usage, see `python ddqn.py -h`
 ```cmd
-usage: ddqn.py [-h] [--step STEP] [--history HISTORY] [--norender] [--train] [--play] [--visual VISUAL]
-               [--model_load MODEL_LOAD] [--model_save MODEL_SAVE] [--test TEST]
+usage: ddqn.py [-h] [--step STEP] [--history HISTORY] [--render RENDER] [--train] [--play] [--visual VISUAL]
+               [--model_load MODEL_LOAD] [--model_save MODEL_SAVE] [--test TEST] [--epsilon EPSILON] [--log]
 
 optional arguments:
   -h, --help            show this help message and exit
   --step STEP           the number of step it will train
   --history HISTORY     after HISTORY generations, save model every 1000 generations
-  --norender            no render while training
+  --render RENDER       render level while training, 0: no render, 1: render once after die, 2[default]: render every step
   --train               only train
   --play                only play
   --visual VISUAL       the manhattan distance that snakes can see
@@ -52,6 +52,7 @@ optional arguments:
                         the model's output path
   --test TEST
   --epsilon EPSILON     probability of using random movement during training
+  --log                 output log while training
 ```
 
 If you want to play Snake manually, run `python snake.py`
@@ -92,7 +93,7 @@ This is the default parameter. Under this parameter, the convergence speed of th
 
 > It seems that the above models have not really converged
 
-# DDQN-贪吃蛇
+# D3QN-贪吃蛇
 
 一个用强化学习实现的能只经过几分钟训练后work的贪吃蛇AI
 
@@ -129,14 +130,14 @@ This is the default parameter. Under this parameter, the convergence speed of th
 进一步的使用方法请见 `python ddqn.py -h`
 
 ```cmd
-usage: ddqn.py [-h] [--step STEP] [--history HISTORY] [--norender] [--train] [--play] [--visual VISUAL]
-               [--model_load MODEL_LOAD] [--model_save MODEL_SAVE] [--test TEST]
+usage: ddqn.py [-h] [--step STEP] [--history HISTORY] [--render RENDER] [--train] [--play] [--visual VISUAL]
+               [--model_load MODEL_LOAD] [--model_save MODEL_SAVE] [--test TEST] [--epsilon EPSILON] [--log]
 
 optional arguments:
   -h, --help            show this help message and exit
   --step STEP           the number of step it will train
   --history HISTORY     after HISTORY generations, save model every 1000 generations
-  --norender            no render while training
+  --render RENDER       render level while training, 0: no render, 1: render once after die, 2[default]: render every step
   --train               only train
   --play                only play
   --visual VISUAL       the manhattan distance that snakes can see
@@ -146,6 +147,7 @@ optional arguments:
                         the model's output path
   --test TEST
   --epsilon EPSILON     probability of using random movement during training
+  --log                 output log while training
 ```
 
 如果你想手动玩贪吃蛇，那么直接运行 `python snake.py`，这只需要安装 `pygame`

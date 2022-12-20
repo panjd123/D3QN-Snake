@@ -1,12 +1,11 @@
 import numpy as np
-import pygame
 import torch
 from torch import optim
 from torch.nn import functional as F
 from torch.utils.tensorboard import SummaryWriter
 from model import DuelingNetwork
 from buffer import Buffer
-from snake import Snake
+from snake import Snake, Snake_norender
 from tqdm import tqdm
 import time
 import os
@@ -14,14 +13,15 @@ import os.path as osp
 import matplotlib.pyplot as plt
 from argparse import ArgumentParser
 from collections import deque
+import pygame
 
 parser = ArgumentParser()
 parser.add_argument("--step", type=int, default=1000,
                     help="the number of step it will train")
 parser.add_argument("--history", type=int, default=0,
                     help="after HISTORY generations, save model every 1000 generations")
-parser.add_argument("--norender", action="store_true",
-                    help="no render while training")
+parser.add_argument("--render", type=int, default=2,
+                    help="render level while training, 0: no render, 1: render once after die, 2[default]: render every step")
 parser.add_argument("--train", action="store_true", help="only train")
 parser.add_argument("--play", action="store_true", help="only play")
 parser.add_argument("--visual", type=int, default=2,
@@ -31,8 +31,10 @@ parser.add_argument("--model_load", type=str,
 parser.add_argument("--model_save", type=str,
                     default="model.pkl", help="the model's output path")
 parser.add_argument("--test", type=str, default="")
-parser.add_argument("--epsilon", type=float, default=0.95, help="probability of using random movement during training")
-
+parser.add_argument("--epsilon", type=float, default=0.95,
+                    help="probability of using random movement during training")
+parser.add_argument("--log", action="store_true",
+                    help="output log while training")
 
 argument = parser.parse_args()
 history_dir = 'history-'+time.strftime('%Y-%m-%d-%H-%M-%S')
@@ -96,7 +98,7 @@ class DDQN:
 
         return loss.item()
 
-    def training(self, max_step=1000, is_render=False, is_log=False, queue_maxlen=50):
+    def training(self, max_step=1000, detail_render=False, is_log=True, queue_maxlen=50):
         try:
             epoch = 0
             writer = SummaryWriter()
@@ -112,7 +114,7 @@ class DDQN:
 
                 rew, done, obs_next, info = self.env.step(act)
 
-                if is_render:
+                if detail_render:
                     self.env.render()
 
                 self.buffer.add(obs, act, rew, done, obs_next)
@@ -132,10 +134,10 @@ class DDQN:
                         scores.append(info['score'])
                         mean_reward = np.mean(list(rewards))
                         mean_score = np.mean(list(scores))
-                        tqdm.write(f'{epoch}: '+str(mean_reward)+", "+str(mean_score))
-                    
-                    self.env.render()
-                    pygame.display.set_caption(f"第{epoch}代小蛇")
+                        tqdm.write(f'{epoch}: '+str(mean_reward) +
+                                   ", "+str(mean_score))
+
+                    self.env.render(f"第{epoch}代小蛇")
 
                     obs, act, rew, done, info = self.env.reset()
                     epoch += 1
@@ -150,7 +152,10 @@ class DDQN:
                 history_dir, f"model_{epoch}.pkl"))
         except KeyboardInterrupt:
             torch.save(self.model.state_dict(), 'model_interrupt.pkl')
+            torch.save(self.target_model.state_dict(),
+                       'target_model_interrupt.pkl')
             writer.close()
+            raise KeyboardInterrupt
 
     def select_action(self, obs, act):
         if np.random.rand() > self.epsilon:
@@ -165,7 +170,7 @@ class DDQN:
         return q_value_max_arg.item()
 
     def play(self, max_epoch=100, delay=30, is_render=True):
-        pygame.display.set_caption("Snake")
+        self.env.render('Snake')
         self.epsilon = 1.0
         rewards = []
         scores = []
@@ -177,17 +182,18 @@ class DDQN:
                 rew, done, obs, info = self.env.step(act)
                 if is_render:
                     self.env.render()
-                pygame.time.delay(delay)
+                    pygame.time.delay(delay)
                 total_reward += rew
                 # print('total_reward:', total_reward, 'obs:', obs)
             rewards.append(total_reward)
             scores.append(info['score'])
             self.env.render()
+        print('mean reward:', np.mean(rewards), 'mean score:', np.mean(scores))
         return rewards, scores
 
 
 def test(ddqn: DDQN, dir='history-2022-12-18-03-28-52', epoch=100):
-    print("testing",dir)
+    print("testing", dir)
     gens = []
     scores = []
     for root, dirs, files in os.walk(dir):
@@ -205,27 +211,57 @@ def test(ddqn: DDQN, dir='history-2022-12-18-03-28-52', epoch=100):
 
 
 if __name__ == '__main__':
-    env = Snake(visual_dis=argument.visual)
-    tmp = env.reset()
-    obs_length = len(tmp[0])
-    env.mode = '1d'
+    if argument.render == 0:
+        env_train = Snake_norender(visual_dis=argument.visual)
+    elif argument.render >= 1:
+        env_train = Snake(visual_dis=argument.visual)
+
+    obs_length = len(env_train.reset()[0])
     print('obs_length=', obs_length)
-    ddqn = DDQN((obs_length,), 4, env, epsilon=argument.epsilon)
-    
+
+    ddqn = DDQN((obs_length,), 4, env_train, epsilon=argument.epsilon)
+
     if argument.test:
-        test(ddqn,argument.test)
+        test(ddqn, argument.test)
         exit(0)
 
-    # continue to train
-    try:
-        if osp.exists('./model.pkl'):
+    if not argument.play:  # train
+        # continue to train
+        try:
             ddqn.model.load_state_dict(torch.load(argument.model_load))
-    except:
-        print('loading fail, use initialization parameters')
+        except Exception as e:
+            print(e)
+            print('Warning: loading model fail, use initialization parameters')
 
-    if not argument.play:
-        ddqn.training(max_step=argument.step, is_render=not argument.norender)
+        try:
+            ddqn.model.load_state_dict(torch.load('target_model.pkl'))
+        except Exception as e:
+            print(e)
+            print('Warning: loading target model fail, use initialization parameters')
+        ddqn.training(max_step=argument.step,
+                      detail_render=argument.render == 2, is_log=argument.log)
         torch.save(ddqn.model.state_dict(), argument.model_save)
+        torch.save(ddqn.target_model.state_dict(), 'target_model.pkl')
 
-    if not argument.train:
-        ddqn.play(5)
+    if not argument.train:  # play
+        env_play = Snake(visual_dis=argument.visual)
+        ddqn_play = DDQN((obs_length,), 4, env_train, epsilon=argument.epsilon)
+        if not argument.play:  # after train
+            try:
+                ddqn_play.model.load_state_dict(
+                    torch.load(argument.model_save))
+            except Exception as e:
+                print(e)
+                print('Warning: loading model fail, use initialization parameters')
+        else:  # without train
+            try:
+                ddqn_play.model.load_state_dict(
+                    torch.load(argument.model_load))
+            except Exception as e:
+                print(e)
+                print('Warning: loading model fail, use initialization parameters')
+        ddqn_play.play(10)
+
+# python ddqn.py --visual 2 --train --model_load history-2022-12-18-03-28-52/model_33300.pkl --step 1000000 --render 0 --epsilon 0.98 --log
+# python ddqn.py --visual 2 --train --model_load model.pkl --step 1000000 --render 0 --epsilon 0.98 --log
+# python ddqn.py --visual 2 --play --model_load model.pkl
