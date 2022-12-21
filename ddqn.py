@@ -31,7 +31,7 @@ parser.add_argument("--model_load", type=str,
 parser.add_argument("--model_save", type=str,
                     default="model.pkl", help="the model's output path")
 parser.add_argument("--test", type=str, default="")
-parser.add_argument("--epsilon", type=float, default=0.95,
+parser.add_argument("--epsilon", type=float, default=0.05,
                     help="probability of using random movement during training")
 parser.add_argument("--log", action="store_true",
                     help="output log while training")
@@ -44,7 +44,7 @@ if not argument.play and not argument.test:
 
 
 class DDQN:
-    def __init__(self, input_shape, num_act, env: Snake, gamma=0.99, lamda=0.05, epsilon=0.95) -> None:
+    def __init__(self, input_shape, num_act, env: Snake, gamma=0.99, lamda=0.05, epsilon=0.05) -> None:
         self.gamma = gamma
         self.lamda = lamda
         self.model = DuelingNetwork(input_shape, num_act)
@@ -158,7 +158,7 @@ class DDQN:
             raise KeyboardInterrupt
 
     def select_action(self, obs, act):
-        if np.random.rand() > self.epsilon:
+        if np.random.rand() > 1-self.epsilon:
             return self.env.random_action(act)
         q_value = self.model(torch.tensor(
             obs, dtype=torch.float, device=self.device).unsqueeze(0))
@@ -171,7 +171,7 @@ class DDQN:
 
     def play(self, max_epoch=100, delay=30, is_render=True):
         self.env.render('Snake')
-        self.epsilon = 1.0
+        self.epsilon = 0
         rewards = []
         scores = []
         for epoch in range(max_epoch):
@@ -261,7 +261,3 @@ if __name__ == '__main__':
                 print(e)
                 print('Warning: loading model fail, use initialization parameters')
         ddqn_play.play(10)
-
-# python ddqn.py --visual 2 --train --model_load history-2022-12-18-03-28-52/model_33300.pkl --step 1000000 --render 0 --epsilon 0.98 --log
-# python ddqn.py --visual 2 --train --model_load model.pkl --step 1000000 --render 0 --epsilon 0.98 --log
-# python ddqn.py --visual 2 --play --model_load model.pkl
