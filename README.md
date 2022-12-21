@@ -1,10 +1,10 @@
 # D3QN Snake
 
-[中文版](#ddqn-贪吃蛇)
+[中文版](#d3qn-贪吃蛇)
 
 A greedy snake AI using reinforcement learning, which can work after only a few minutes of training
 
-Used skills including experience playback, double Q learning, and dueling network [enhanced learning DQN quick start](https://blog.csdn.net/qq_32461955/article/details/126040912)
+Used skills including experience playback, double Q learning, and dueling network [reinforcement learning DQN quick start](https://blog.csdn.net/qq_32461955/article/details/126040912)
 
 The project also uploaded 2 models trained for 5 hours on the CPU
 
